@@ -46,28 +46,39 @@ catpets/
   pom.xml                                  # DONE
   src/main/resources/cascades/*.xml        # DONE (both cascades downloaded)
   src/main/java/com/lingpets/
-    Launcher.java        # jar entry point (does NOT extend Application)
-    Main.java            # JavaFX Application
+    Launcher.java        # DONE
+    Main.java            # DONE
     model/CatHead.java   # DONE
-    model/Pet.java
-    model/PetStore.java
-    detect/CatFaceDetector.java
-    ui/ControlPanel.java
-    ui/PetWidget.java
-    util/Images.java     # Mat <-> BufferedImage, circular mask
+    model/Pet.java       # DONE
+    model/PetStore.java  # DONE
+    detect/CatFaceDetector.java  # DONE
+    ui/ControlPanel.java  # DONE
+    ui/PetWidget.java     # DONE
+    util/Images.java     # DONE — Mat <-> BufferedImage, circular mask
 ```
 
 ## Current progress
 - [x] Maven `pom.xml` (JavaFX + OpenCV + Gson + shade plugin)
 - [x] Both Haar cascade XML files in `src/main/resources/cascades/`
 - [x] `model/CatHead.java`
-- 
-- [ ] Everything else (Launcher, Main, Pet, PetStore, CatFaceDetector, Images, ControlPanel, PetWidget)
+- [x] `model/Pet.java`
+- [x] `model/PetStore.java` — disk persistence, single source of truth
+- [x] `util/Images.java` — Mat↔BufferedImage conversion, circular mask
+- [x] `detect/CatFaceDetector.java` — Haar cascade + centred-crop fallback
+- [x] `ui/PetWidget.java` — floating always-on-top head; drag / scroll-resize / click-to-pet
+- [x] `ui/ControlPanel.java` — file picker, head list with thumbnails, remove button
+- [x] `Launcher.java` — loads OpenCV native lib then calls Application.launch
+- [x] `Main.java` — wires PetStore + detector + ControlPanel + PetWidgets
+
+## Current status
+All planned files are implemented and compile cleanly (`mvn compile` — 9 source files, 0 errors).
+
+Run the app:
+  mvn clean javafx:run
 
 ## Next step
-Implement `util/Images.java` and `detect/CatFaceDetector.java` first (the core, testable
-part), verify by running the detector on a sample cat photo headlessly, then build the
-JavaFX UI (ControlPanel + PetWidget) and wire in PetStore persistence.
+Smoke-test: add a cat photo and verify the widget appears. Then test drag, scroll-resize,
+and click-to-pet rotation.
 
 ## Gotcha
 Running `Main` directly can fail with "JavaFX runtime components are missing" because
