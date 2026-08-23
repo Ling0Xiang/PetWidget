@@ -55,7 +55,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.lingpets.Main</mainClass>
+                    <mainClass>com.lingpets.Launcher</mainClass>
                 </configuration>
             </plugin>
 
