@@ -60,7 +60,7 @@ catpets/
 ## Current progress
 - [x] Maven `pom.xml` (JavaFX + OpenCV + Gson + shade plugin)
 - [x] Both Haar cascade XML files in `src/main/resources/cascades/`
-- [ ] `model/CatHead.java`
+- [x] `model/CatHead.java`
 - 
 - [ ] Everything else (Launcher, Main, Pet, PetStore, CatFaceDetector, Images, ControlPanel, PetWidget)
 
