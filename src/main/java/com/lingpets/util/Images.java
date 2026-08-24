@@ -30,9 +30,19 @@ public final class Images {
         }
 
         int w = bgra.cols(), h = bgra.rows();
+        // OpenCV BGRA bytes are [B,G,R,A]; Java TYPE_4BYTE_ABGR expects [A,B,G,R].
+        // Read into a temp buffer, then reorder into the image's backing array.
+        byte[] bgraBytes = new byte[w * h * 4];
+        bgra.get(0, 0, bgraBytes);
+
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_4BYTE_ABGR);
-        byte[] data = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
-        bgra.get(0, 0, data);
+        byte[] abgr = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
+        for (int i = 0; i < bgraBytes.length; i += 4) {
+            abgr[i]     = bgraBytes[i + 3]; // A
+            abgr[i + 1] = bgraBytes[i];     // B
+            abgr[i + 2] = bgraBytes[i + 1]; // G
+            abgr[i + 3] = bgraBytes[i + 2]; // R
+        }
         return img;
     }
 
