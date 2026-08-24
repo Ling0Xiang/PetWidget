@@ -4,73 +4,73 @@ import nu.pattern.OpenCV;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Headless tests for CatFaceDetector.
- *
- * All cases use programmatically generated images so the test suite has no
- * external file dependencies. A solid-colour image triggers the centred-crop
- * fallback (no Haar match), which is the code path that must always succeed.
- */
 class CatFaceDetectorTest {
 
     private static CatFaceDetector detector;
+    private static BufferedImage patsy; // real cat photo used for detection tests
 
     @BeforeAll
-    static void setup() {
+    static void setup() throws Exception {
         OpenCV.loadLocally();
         detector = new CatFaceDetector();
+        try (InputStream in = CatFaceDetectorTest.class.getResourceAsStream("/Patsy.jpeg")) {
+            assertNotNull(in, "Patsy.jpeg must be present in src/test/resources");
+            patsy = ImageIO.read(in);
+        }
     }
 
     // -------------------------------------------------------------------------
-    // Output dimensions
+    // Output dimensions — use Patsy as source
 
     @Test
     void defaultSizeIs120() {
-        BufferedImage head = detector.detect(solidImage(300, 300, Color.GRAY));
+        BufferedImage head = detector.detect(patsy);
         assertEquals(120, head.getWidth());
         assertEquals(120, head.getHeight());
     }
 
     @Test
     void customSizeIsRespected() {
-        BufferedImage head = detector.detect(solidImage(300, 300, Color.GRAY), 64);
+        BufferedImage head = detector.detect(patsy, 64);
         assertEquals(64, head.getWidth());
         assertEquals(64, head.getHeight());
     }
 
     @Test
-    void squareInputProducesSquareOutput() {
-        BufferedImage head = detector.detect(solidImage(200, 200, Color.BLUE), 80);
+    void outputIsAlwaysSquare() {
+        BufferedImage head = detector.detect(patsy, 80);
         assertEquals(head.getWidth(), head.getHeight());
     }
 
     @Test
     void nonSquareInputProducesSquareOutput() {
-        // wide landscape image
-        BufferedImage head = detector.detect(solidImage(640, 320, Color.GREEN), 120);
+        // Crop Patsy to a wide landscape strip to force a non-square input
+        BufferedImage landscape = patsy.getSubimage(0, 0, patsy.getWidth(), patsy.getHeight() / 2);
+        BufferedImage head = detector.detect(landscape, 120);
         assertEquals(120, head.getWidth());
         assertEquals(120, head.getHeight());
     }
 
     // -------------------------------------------------------------------------
-    // Alpha channel (circular mask)
+    // Alpha channel (circular mask) — use Patsy as source
 
     @Test
     void outputHasAlphaChannel() {
-        BufferedImage head = detector.detect(solidImage(200, 200, Color.RED));
+        BufferedImage head = detector.detect(patsy);
         assertTrue(head.getColorModel().hasAlpha(),
                 "output must carry an alpha channel for the circular mask to work");
     }
 
     @Test
     void cornersAreTransparent() {
-        BufferedImage head = detector.detect(solidImage(300, 300, Color.RED));
-        // The four corner pixels lie outside the inscribed circle and must be fully transparent.
+        BufferedImage head = detector.detect(patsy);
         assertTransparent(head, 0, 0,                           "top-left corner");
         assertTransparent(head, head.getWidth() - 1, 0,         "top-right corner");
         assertTransparent(head, 0, head.getHeight() - 1,        "bottom-left corner");
@@ -79,21 +79,29 @@ class CatFaceDetectorTest {
 
     @Test
     void centerPixelIsOpaque() {
-        // A fully red source image should yield a red, fully opaque centre after cropping.
-        BufferedImage head = detector.detect(solidImage(300, 300, Color.RED));
+        BufferedImage head = detector.detect(patsy);
         int cx = head.getWidth()  / 2;
         int cy = head.getHeight() / 2;
         assertOpaque(head, cx, cy, "centre pixel");
     }
 
+    // Fallback path: solid colour image has no detectable cat face,
+    // so the centred-crop code path runs instead.
+
     @Test
-    void centerPixelPreservesSourceColour() {
-        // Verify the crop doesn't swap channels — red in, red out.
+    void fallbackCentredCropProducesCorrectSize() {
+        BufferedImage head = detector.detect(solidImage(300, 300, Color.GRAY));
+        assertEquals(120, head.getWidth());
+        assertEquals(120, head.getHeight());
+    }
+
+    @Test
+    void fallbackCentredCropPreservesColour() {
         BufferedImage head = detector.detect(solidImage(300, 300, Color.RED));
         int cx = head.getWidth()  / 2;
         int cy = head.getHeight() / 2;
         Color c = new Color(head.getRGB(cx, cy), true);
-        assertTrue(c.getRed() > 200,   "red channel should be high");
+        assertTrue(c.getRed()   > 200, "red channel should be high");
         assertTrue(c.getGreen() < 50,  "green channel should be low");
         assertTrue(c.getBlue()  < 50,  "blue channel should be low");
     }
