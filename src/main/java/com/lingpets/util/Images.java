@@ -1,5 +1,6 @@
 package com.lingpets.util;
 
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Size;
@@ -9,6 +10,8 @@ import java.awt.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class Images {
 
@@ -76,6 +79,63 @@ public final class Images {
 
         BufferedImage square = matToBufferedImage(scaled);
         return applyCircularMask(square);
+    }
+
+    /**
+     * Takes a BGRA mat (cat silhouette with alpha channel), finds the tight bounding
+     * box of the non-transparent pixels, crops to it with a small padding, then scales
+     * the result to fit inside {@code size}×{@code size} preserving aspect ratio and
+     * centres it on a transparent square canvas.
+     */
+    public static BufferedImage fitInSquare(Mat bgra, int size) {
+        // Find bounding box of non-transparent pixels via the alpha channel.
+        List<Mat> ch = new ArrayList<>();
+        Core.split(bgra, ch);
+        byte[] alphaData = new byte[(int) ch.get(3).total()];
+        ch.get(3).get(0, 0, alphaData);
+
+        int minX = bgra.cols(), minY = bgra.rows(), maxX = 0, maxY = 0;
+        boolean found = false;
+        for (int row = 0; row < bgra.rows(); row++) {
+            for (int col = 0; col < bgra.cols(); col++) {
+                if ((alphaData[row * bgra.cols() + col] & 0xFF) > 0) {
+                    if (col < minX) minX = col;
+                    if (col > maxX) maxX = col;
+                    if (row < minY) minY = row;
+                    if (row > maxY) maxY = row;
+                    found = true;
+                }
+            }
+        }
+
+        if (!found) {
+            minX = 0; minY = 0; maxX = bgra.cols() - 1; maxY = bgra.rows() - 1;
+        }
+
+        // Add a small padding around the tight bounds.
+        int padX = Math.max(4, (maxX - minX) / 20);
+        int padY = Math.max(4, (maxY - minY) / 20);
+        int x0 = Math.max(0, minX - padX);
+        int y0 = Math.max(0, minY - padY);
+        int x1 = Math.min(bgra.cols(), maxX + padX + 1);
+        int y1 = Math.min(bgra.rows(), maxY + padY + 1);
+
+        Mat cropped = bgra.submat(y0, y1, x0, x1);
+
+        // Scale to fit inside size×size preserving aspect ratio.
+        double scale  = Math.min((double) size / cropped.cols(), (double) size / cropped.rows());
+        int scaledW   = Math.max(1, (int)(cropped.cols() * scale));
+        int scaledH   = Math.max(1, (int)(cropped.rows() * scale));
+        Mat scaled    = new Mat();
+        Imgproc.resize(cropped, scaled, new Size(scaledW, scaledH), 0, 0, Imgproc.INTER_AREA);
+
+        // Centre on a fully transparent size×size canvas.
+        int offsetX = (size - scaledW) / 2;
+        int offsetY = (size - scaledH) / 2;
+        Mat canvas  = Mat.zeros(size, size, CvType.CV_8UC4);
+        scaled.copyTo(canvas.submat(offsetY, offsetY + scaledH, offsetX, offsetX + scaledW));
+
+        return matToBufferedImage(canvas);
     }
 
     /** Returns a copy of {@code img} with corners made transparent (circle inscribed in the image). */

@@ -1,6 +1,8 @@
 package com.lingpets.detect;
 
 import com.lingpets.util.Images;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Rect;
@@ -13,6 +15,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Pure function: BufferedImage in → circular head BufferedImage out.
@@ -54,6 +58,64 @@ public final class CatFaceDetector {
 
     public BufferedImage detect(BufferedImage source) {
         return detect(source, DEFAULT_HEAD_SIZE);
+    }
+
+    /**
+     * Extracts the cat's whole body with a transparent background.
+     *
+     * Uses the detected face position to seed a GrabCut body region, runs
+     * GrabCut to separate the cat from the background, then fits the result
+     * (preserving aspect ratio) into an {@code outputSize}×{@code outputSize}
+     * square with transparent padding. No circular mask is applied.
+     */
+    public BufferedImage detectBody(BufferedImage source, int outputSize) {
+        Mat mat = Images.bufferedImageToMat(source);
+        Rect face = findBestFace(mat);
+
+        // Seed rect for GrabCut: face position expanded to cover the full body.
+        Rect seedRect = bodyRect(face, mat.cols(), mat.rows());
+
+        Mat gcMask   = new Mat();
+        Mat bgdModel = new Mat();
+        Mat fgdModel = new Mat();
+        Imgproc.grabCut(mat, gcMask, seedRect, bgdModel, fgdModel, 5, Imgproc.GC_INIT_WITH_RECT);
+
+        // Convert GrabCut mask to a binary alpha channel (255 = cat, 0 = background).
+        byte[] maskBytes  = new byte[(int) gcMask.total()];
+        gcMask.get(0, 0, maskBytes);
+        byte[] alphaBytes = new byte[maskBytes.length];
+        for (int i = 0; i < maskBytes.length; i++) {
+            int v = maskBytes[i] & 0xFF;
+            alphaBytes[i] = (v == Imgproc.GC_FGD || v == Imgproc.GC_PR_FGD) ? (byte) 255 : 0;
+        }
+        Mat alphaMat = new Mat(mat.rows(), mat.cols(), CvType.CV_8UC1);
+        alphaMat.put(0, 0, alphaBytes);
+
+        // Merge BGR + alpha into a single BGRA mat.
+        List<Mat> channels = new ArrayList<>();
+        Core.split(mat, channels);
+        channels.add(alphaMat);
+        Mat bgra = new Mat();
+        Core.merge(channels, bgra);
+
+        // Crop tight to the foreground bounding box, then fit into the output square.
+        return Images.fitInSquare(bgra, outputSize);
+    }
+
+    public BufferedImage detectBody(BufferedImage source) {
+        return detectBody(source, DEFAULT_HEAD_SIZE);
+    }
+
+    /** Estimates the full-body bounding rect from the detected face position. */
+    private static Rect bodyRect(Rect face, int imgW, int imgH) {
+        if (face != null) {
+            int x      = Math.max(5, (int)(face.x - face.width  * 0.8));
+            int y      = Math.max(5, (int)(face.y - face.height * 0.3));
+            int right  = Math.min(imgW - 5, (int)(face.x + face.width  * 1.8));
+            int bottom = Math.min(imgH - 5, (int)(face.y + face.height * 5.0));
+            return new Rect(x, y, right - x, bottom - y);
+        }
+        return new Rect(5, 5, imgW - 10, imgH - 10);
     }
 
     // -------------------------------------------------------------------------
