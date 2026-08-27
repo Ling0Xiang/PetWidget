@@ -63,8 +63,10 @@ public class Main extends Application {
                     Platform.runLater(() -> {
                         try {
                             CatHead head = store.addHead(headImg, file.getName());
-                            Pet pet = store.addPet(head.id, randomScreenX(), randomScreenY());
-                            spawnWidget(pet);
+                            if (widgets.isEmpty()) {
+                                Pet pet = store.addPet(head.id, randomScreenX(), randomScreenY());
+                                spawnWidget(pet);
+                            }
                             controlPanel.refreshList();
                         } catch (Exception ex) {
                             ex.printStackTrace();
