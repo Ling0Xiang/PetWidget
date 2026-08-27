@@ -58,7 +58,7 @@ public class Main extends Application {
                         decrement(remaining);
                         return;
                     }
-                    BufferedImage headImg = detector.detect(src);
+                    BufferedImage headImg = detector.detectBody(src);
 
                     Platform.runLater(() -> {
                         try {
