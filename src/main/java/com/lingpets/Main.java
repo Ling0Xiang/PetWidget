@@ -1,6 +1,7 @@
 package com.lingpets;
 
 import com.lingpets.detect.CatFaceDetector;
+import com.lingpets.detect.U2NetCutout;
 import com.lingpets.model.CatHead;
 import com.lingpets.model.Pet;
 import com.lingpets.model.PetStore;
@@ -16,6 +17,8 @@ import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,6 +29,7 @@ public class Main extends Application {
     private CatFaceDetector detector;
     private ControlPanel controlPanel;
     private final List<PetWidget> widgets = new ArrayList<>();
+    private volatile U2NetCutout u2netCutout; // null until model is ready
 
     @Override
     public void start(Stage primaryStage) {
@@ -40,6 +44,36 @@ public class Main extends Application {
         }
 
         controlPanel.show();
+        initU2Net();
+    }
+
+    @Override
+    public void stop() throws Exception {
+        if (u2netCutout != null) u2netCutout.close();
+    }
+
+    // -------------------------------------------------------------------------
+    // U2-Net model initialisation
+
+    private void initU2Net() {
+        Path modelPath = U2NetCutout.defaultModelPath();
+        if (!Files.exists(modelPath)) {
+            controlPanel.setStatus("Downloading AI model (one-time, ~176 MB)…");
+        } else {
+            controlPanel.setStatus("Loading AI model…");
+        }
+        Thread.ofVirtual().start(() -> {
+            try {
+                U2NetCutout.ensureModel(modelPath, bytes ->
+                    Platform.runLater(() ->
+                        controlPanel.setStatus("Downloading AI model… " + (bytes / 1_048_576) + " MB")));
+                u2netCutout = new U2NetCutout(modelPath);
+            } catch (Exception e) {
+                e.printStackTrace(); // falls back to detectBody at photo-add time
+            } finally {
+                Platform.runLater(() -> controlPanel.setStatus(null));
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -58,7 +92,16 @@ public class Main extends Application {
                         decrement(remaining);
                         return;
                     }
-                    BufferedImage headImg = detector.detectBody(src);
+                    BufferedImage tmp;
+                    try {
+                        tmp = u2netCutout != null
+                                ? u2netCutout.cutout(src)
+                                : detector.detectBody(src);
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        tmp = detector.detectBody(src);
+                    }
+                    final BufferedImage headImg = tmp;
 
                     Platform.runLater(() -> {
                         try {
