@@ -3,20 +3,32 @@ package com.lingpets.ui;
 import com.lingpets.model.Pet;
 import com.lingpets.model.PetStore;
 import javafx.animation.*;
-import javafx.geometry.Pos;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.scene.ImageCursor;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
-import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.stream.ImageInputStream;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 /**
  * A floating, always-on-top, transparent window that shows one circular cat head.
@@ -39,12 +51,20 @@ public class PetWidget {
 
     private final Stage stage;
     private final ImageView imageView;
-    private final Text handEmoji;
 
     // drag tracking
     private double pressOffsetX, pressOffsetY;
     private double pressScreenX, pressScreenY;
     private boolean dragging;
+
+    private List<CursorFrame> gifFrames = List.of();
+    private Timeline cursorAnimation;
+
+    private static final class CursorFrame {
+        final ImageCursor cursor;
+        final int delayMs;
+        CursorFrame(ImageCursor cursor, int delayMs) { this.cursor = cursor; this.delayMs = delayMs; }
+    }
 
     public PetWidget(Pet pet, PetStore store, Image initialImage,
                      Function<String, Image> loadImage,
@@ -62,20 +82,16 @@ public class PetWidget {
         imageView.setFitHeight(pet.size);
         imageView.setPreserveRatio(false);
 
-        handEmoji = new Text("✋"); // raised hand
-        handEmoji.setFont(Font.font(pet.size * 0.45));
-        handEmoji.setOpacity(0);
-
-        StackPane root = new StackPane(imageView, handEmoji);
-        root.setBackground(null);
-        StackPane.setAlignment(handEmoji, Pos.CENTER);
+        StackPane root = new StackPane(imageView);
 
         Scene scene = new Scene(root, pet.size, pet.size);
         scene.setFill(Color.TRANSPARENT);
+        scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
         stage.setScene(scene);
         stage.setX(pet.x);
         stage.setY(pet.y);
 
+        gifFrames = loadGifFrames("/cursors/petpet-transparent.gif", (int)(pet.size * 0.2));
         wireEvents(root);
     }
 
@@ -136,7 +152,6 @@ public class PetWidget {
     private void applySize(double size) {
         imageView.setFitWidth(size);
         imageView.setFitHeight(size);
-        handEmoji.setFont(Font.font(size * 0.45));
         stage.setWidth(size);
         stage.setHeight(size);
     }
@@ -148,19 +163,84 @@ public class PetWidget {
         pulse.setCycleCount(2);
         pulse.setAutoReverse(true);
 
-        FadeTransition fadeIn  = new FadeTransition(Duration.millis(80),  handEmoji);
-        fadeIn.setFromValue(0); fadeIn.setToValue(1.0);
-        FadeTransition hold    = new FadeTransition(Duration.millis(280), handEmoji);
-        hold.setFromValue(1.0); hold.setToValue(1.0);
-        FadeTransition fadeOut = new FadeTransition(Duration.millis(180), handEmoji);
-        fadeOut.setFromValue(1.0); fadeOut.setToValue(0);
-        SequentialTransition hand = new SequentialTransition(fadeIn, hold, fadeOut);
-
-        // rotate the head partway through the animation
         PauseTransition rotateTrigger = new PauseTransition(Duration.millis(320));
         rotateTrigger.setOnFinished(ev -> rotateHead());
 
-        new ParallelTransition(pulse, hand, rotateTrigger).play();
+        playCursorAnimation(540);
+        new ParallelTransition(pulse, rotateTrigger).play();
+    }
+
+    private void playCursorAnimation(double durationMs) {
+        if (gifFrames.isEmpty()) return;
+        if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
+        Scene scene = stage.getScene();
+        Timeline tl = new Timeline();
+        double t = 0;
+        for (CursorFrame f : gifFrames) {
+            ImageCursor c = f.cursor;
+            tl.getKeyFrames().add(new KeyFrame(Duration.millis(t), ev -> scene.setCursor(c)));
+            t += f.delayMs;
+        }
+        tl.setCycleCount(Timeline.INDEFINITE);
+        tl.play();
+        cursorAnimation = tl;
+        PauseTransition restore = new PauseTransition(Duration.millis(durationMs));
+        restore.setOnFinished(ev -> {
+            tl.stop();
+            cursorAnimation = null;
+//            scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
+        });
+        restore.play();
+    }
+
+    private List<CursorFrame> loadGifFrames(String resource, int targetSize) {
+        int size = Math.max(8, targetSize);
+        try (InputStream in = getClass().getResourceAsStream(resource)) {
+            if (in == null) return List.of();
+            ImageInputStream iis = ImageIO.createImageInputStream(in);
+            Iterator<ImageReader> it = ImageIO.getImageReadersByFormatName("gif");
+            if (!it.hasNext()) return List.of();
+            ImageReader reader = it.next();
+            reader.setInput(iis);
+            int n = reader.getNumImages(true);
+            List<CursorFrame> frames = new ArrayList<>();
+            BufferedImage canvas = null;
+            for (int i = 0; i < n; i++) {
+                BufferedImage raw = reader.read(i);
+                if (canvas == null)
+                    canvas = new BufferedImage(raw.getWidth(), raw.getHeight(), BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = canvas.createGraphics();
+                g.drawImage(raw, 0, 0, null);
+                g.dispose();
+                BufferedImage scaled = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+                Graphics2D gs = scaled.createGraphics();
+                gs.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                gs.drawImage(canvas, 0, 0, size, size, null);
+                gs.dispose();
+                WritableImage fx = SwingFXUtils.toFXImage(scaled, null);
+                ImageCursor cursor = new ImageCursor(fx, size / 2.0, 2);
+                frames.add(new CursorFrame(cursor, gifFrameDelayMs(reader.getImageMetadata(i))));
+            }
+            reader.dispose();
+            return frames;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private static int gifFrameDelayMs(IIOMetadata meta) {
+        try {
+            Node tree = meta.getAsTree("javax_imageio_gif_image_1.0");
+            NodeList children = tree.getChildNodes();
+            for (int i = 0; i < children.getLength(); i++) {
+                Node child = children.item(i);
+                if ("GraphicControlExtension".equals(child.getNodeName())) {
+                    Node d = child.getAttributes().getNamedItem("delayTime");
+                    if (d != null) return Integer.parseInt(d.getNodeValue()) * 10;
+                }
+            }
+        } catch (Exception ignored) {}
+        return 100;
     }
 
     private void rotateHead() {
