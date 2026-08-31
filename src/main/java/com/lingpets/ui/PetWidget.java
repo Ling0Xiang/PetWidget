@@ -83,6 +83,7 @@ public class PetWidget {
         imageView.setPreserveRatio(false);
 
         StackPane root = new StackPane(imageView);
+        root.setStyle("-fx-background-color: transparent;");
 
         Scene scene = new Scene(root, pet.size, pet.size);
         scene.setFill(Color.TRANSPARENT);
