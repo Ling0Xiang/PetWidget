@@ -183,12 +183,15 @@ public class PetWidget {
         PauseTransition rotateTrigger = new PauseTransition(Duration.millis(320));
         rotateTrigger.setOnFinished(ev -> rotateHead());
 
-        playCursorAnimation(540);
+        playCursorAnimation(540, () -> applySize(pet.size));
         new ParallelTransition(pulse, rotateTrigger).play();
     }
 
-    private void playCursorAnimation(double durationMs) {
-        if (gifFrames.isEmpty()) return;
+    private void playCursorAnimation(double durationMs, Runnable onComplete) {
+        if (gifFrames.isEmpty()) {
+            if (onComplete != null) onComplete.run();
+            return;
+        }
         if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
         Scene scene = stage.getScene();
         Timeline tl = new Timeline();
@@ -205,7 +208,7 @@ public class PetWidget {
         restore.setOnFinished(ev -> {
             tl.stop();
             cursorAnimation = null;
-//            scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
+            if (onComplete != null) onComplete.run();
         });
         restore.play();
     }
@@ -269,6 +272,6 @@ public class PetWidget {
         Image newImg = loadImage.apply(newHeadId);
         aspectRatio = imageRatio(newImg);
         imageView.setImage(newImg);
-        applySize(pet.size);
+        // window resize is deferred to after the cursor animation via playCursorAnimation callback
     }
 }
