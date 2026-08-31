@@ -57,6 +57,8 @@ public class PetWidget {
     private double pressScreenX, pressScreenY;
     private boolean dragging;
 
+    private double aspectRatio = 1.0; // width / height of the current head image
+
     private List<CursorFrame> gifFrames = List.of();
     private Timeline cursorAnimation;
 
@@ -78,14 +80,16 @@ public class PetWidget {
         stage.setAlwaysOnTop(true);
 
         imageView = new ImageView(initialImage);
-        imageView.setFitWidth(pet.size);
-        imageView.setFitHeight(pet.size);
         imageView.setPreserveRatio(false);
+        aspectRatio = imageRatio(initialImage);
+        double[] initDims = scaledDims(pet.size, aspectRatio);
+        imageView.setFitWidth(initDims[0]);
+        imageView.setFitHeight(initDims[1]);
 
         StackPane root = new StackPane(imageView);
         root.setStyle("-fx-background-color: transparent;");
 
-        Scene scene = new Scene(root, pet.size, pet.size);
+        Scene scene = new Scene(root, initDims[0], initDims[1]);
         scene.setFill(Color.TRANSPARENT);
         scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
         stage.setScene(scene);
@@ -151,10 +155,22 @@ public class PetWidget {
     }
 
     private void applySize(double size) {
-        imageView.setFitWidth(size);
-        imageView.setFitHeight(size);
-        stage.setWidth(size);
-        stage.setHeight(size);
+        double[] dims = scaledDims(size, aspectRatio);
+        imageView.setFitWidth(dims[0]);
+        imageView.setFitHeight(dims[1]);
+        stage.setWidth(dims[0]);
+        stage.setHeight(dims[1]);
+    }
+
+    private static double imageRatio(Image img) {
+        double h = img.getHeight();
+        return (h > 0) ? img.getWidth() / h : 1.0;
+    }
+
+    /** Returns {width, height} so the longest side equals {@code size}. */
+    private static double[] scaledDims(double size, double ratio) {
+        if (ratio >= 1.0) return new double[]{size, size / ratio};
+        else              return new double[]{size * ratio, size};
     }
 
     private void animatePet() {
@@ -250,6 +266,9 @@ public class PetWidget {
         pet.headId = newHeadId;
         try { store.updateHead(pet.id, newHeadId); }
         catch (Exception ex) { ex.printStackTrace(); }
-        imageView.setImage(loadImage.apply(newHeadId));
+        Image newImg = loadImage.apply(newHeadId);
+        aspectRatio = imageRatio(newImg);
+        imageView.setImage(newImg);
+        applySize(pet.size);
     }
 }
