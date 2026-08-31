@@ -62,6 +62,7 @@ public class PetWidget {
     private List<CursorFrame> gifFrames = List.of();
     private Timeline cursorAnimation;
     private PauseTransition restoreTransition;
+    private PauseTransition sizeUpdateTransition;
 
     private static final class CursorFrame {
         final ImageCursor cursor;
@@ -141,6 +142,9 @@ public class PetWidget {
             e.consume();
         });
 
+        root.setOnMouseEntered(e -> startHoverCursor());
+        root.setOnMouseExited(e -> stopHoverCursor());
+
         root.setOnScroll(e -> {
             double delta = Math.signum(e.getDeltaY()) * 10;
             double newSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, pet.size + delta));
@@ -152,6 +156,27 @@ public class PetWidget {
             }
             e.consume();
         });
+    }
+
+    private void startHoverCursor() {
+        if (gifFrames.isEmpty() || cursorAnimation != null) return;
+        Scene scene = stage.getScene();
+        Timeline tl = new Timeline();
+        double t = 0;
+        for (CursorFrame f : gifFrames) {
+            ImageCursor c = f.cursor;
+            tl.getKeyFrames().add(new KeyFrame(Duration.millis(t), ev -> scene.setCursor(c)));
+            t += f.delayMs;
+        }
+        tl.setCycleCount(Timeline.INDEFINITE);
+        tl.play();
+        cursorAnimation = tl;
+    }
+
+    private void stopHoverCursor() {
+        if (restoreTransition != null) { restoreTransition.stop(); restoreTransition = null; }
+        if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
+        stage.getScene().setCursor(javafx.scene.Cursor.DEFAULT);
     }
 
     // Called after rotation: update imageView only, never the stage.
@@ -191,7 +216,16 @@ public class PetWidget {
         PauseTransition rotateTrigger = new PauseTransition(Duration.millis(320));
         rotateTrigger.setOnFinished(ev -> rotateHead());
 
-        playCursorAnimation(540, this::updateImageViewSize);
+        // Cancel any in-flight size update so rapid clicks don't stack them
+        if (sizeUpdateTransition != null) sizeUpdateTransition.stop();
+        sizeUpdateTransition = new PauseTransition(Duration.millis(540));
+        sizeUpdateTransition.setOnFinished(ev -> { updateImageViewSize(); sizeUpdateTransition = null; });
+        sizeUpdateTransition.play();
+
+        // Cursor is owned by hover — ensure it's running (covers the edge case where
+        // gifFrames finished loading after mouseEntered already fired)
+        startHoverCursor();
+
         new ParallelTransition(pulse, rotateTrigger).play();
     }
 
