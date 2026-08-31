@@ -160,6 +160,8 @@ public class PetWidget {
         imageView.setFitHeight(dims[1]);
         stage.setWidth(dims[0]);
         stage.setHeight(dims[1]);
+        // Re-assert cursor after native window resize so the next animation is visible
+        stage.getScene().setCursor(javafx.scene.Cursor.OPEN_HAND);
     }
 
     private static double imageRatio(Image img) {
@@ -208,6 +210,7 @@ public class PetWidget {
         restore.setOnFinished(ev -> {
             tl.stop();
             cursorAnimation = null;
+            scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
             if (onComplete != null) onComplete.run();
         });
         restore.play();
