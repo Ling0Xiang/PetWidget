@@ -15,6 +15,8 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Files;
@@ -106,7 +108,7 @@ public class Main extends Application {
                         ex.printStackTrace();
                         tmp = detector.detectBody(src);
                     }
-                    final BufferedImage headImg = tmp;
+                    final BufferedImage headImg = scaleToMax(tmp, 600);
 
                     Platform.runLater(() -> {
                         try {
@@ -177,11 +179,28 @@ public class Main extends Application {
         widget.show();
     }
 
-    /** Loads the head image from disk as a JavaFX Image. */
+    /** Loads the head image from disk as a JavaFX Image, capped at 600 px on the long side. */
     private Image loadImage(String headId) {
         return store.findHead(headId)
-                    .map(h -> new Image(store.headImagePath(h).toUri().toString()))
+                    .map(h -> new Image(store.headImagePath(h).toUri().toString(),
+                                        600, 600, true, true, false))
                     .orElseThrow(() -> new IllegalStateException("Missing head: " + headId));
+    }
+
+    /** Scales {@code src} so the long side is at most {@code maxSide}; returns src unchanged if already small enough. */
+    private static BufferedImage scaleToMax(BufferedImage src, int maxSide) {
+        int w = src.getWidth(), h = src.getHeight();
+        if (w <= maxSide && h <= maxSide) return src;
+        double scale = (double) maxSide / Math.max(w, h);
+        int nw = Math.max(1, (int)(w * scale));
+        int nh = Math.max(1, (int)(h * scale));
+        BufferedImage out = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING,     RenderingHints.VALUE_RENDER_QUALITY);
+        g.drawImage(src, 0, 0, nw, nh, null);
+        g.dispose();
+        return out;
     }
 
     /**
