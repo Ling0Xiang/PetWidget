@@ -61,6 +61,7 @@ public class PetWidget {
 
     private List<CursorFrame> gifFrames = List.of();
     private Timeline cursorAnimation;
+    private PauseTransition restoreTransition;
 
     private static final class CursorFrame {
         final ImageCursor cursor;
@@ -91,7 +92,6 @@ public class PetWidget {
 
         Scene scene = new Scene(root, initDims[0], initDims[1]);
         scene.setFill(Color.TRANSPARENT);
-        scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
         stage.setScene(scene);
         stage.setX(pet.x);
         stage.setY(pet.y);
@@ -168,8 +168,6 @@ public class PetWidget {
         imageView.setFitHeight(dims[1]);
         stage.setWidth(dims[0]);
         stage.setHeight(dims[1]);
-        // Re-assert cursor after native window resize so the next animation is visible
-        stage.getScene().setCursor(javafx.scene.Cursor.OPEN_HAND);
     }
 
     private static double imageRatio(Image img) {
@@ -202,6 +200,7 @@ public class PetWidget {
             if (onComplete != null) onComplete.run();
             return;
         }
+        if (restoreTransition != null) { restoreTransition.stop(); restoreTransition = null; }
         if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
         Scene scene = stage.getScene();
         Timeline tl = new Timeline();
@@ -218,10 +217,12 @@ public class PetWidget {
         restore.setOnFinished(ev -> {
             tl.stop();
             cursorAnimation = null;
-            scene.setCursor(javafx.scene.Cursor.OPEN_HAND);
+            restoreTransition = null;
+            scene.setCursor(javafx.scene.Cursor.DEFAULT);
             if (onComplete != null) onComplete.run();
         });
         restore.play();
+        restoreTransition = restore;
     }
 
     private List<CursorFrame> loadGifFrames(String resource, int targetSize) {
