@@ -43,6 +43,11 @@ public class Main extends Application {
             spawnWidget(pet);
         }
 
+        // If heads exist but the pet record was lost, auto-spawn for the first head
+        if (widgets.isEmpty() && !store.getHeads().isEmpty()) {
+            autoSpawnForFirstHead();
+        }
+
         controlPanel.show();
         initU2Net();
     }
@@ -144,10 +149,25 @@ public class Main extends Application {
             ex.printStackTrace();
         }
         controlPanel.refreshList();
+
+        // Keep a widget alive as long as any heads remain
+        if (widgets.isEmpty() && !store.getHeads().isEmpty()) {
+            autoSpawnForFirstHead();
+        }
     }
 
     // -------------------------------------------------------------------------
     // Widget helpers
+
+    private void autoSpawnForFirstHead() {
+        try {
+            CatHead first = store.getHeads().get(0);
+            Pet pet = store.addPet(first.id, randomScreenX(), randomScreenY());
+            spawnWidget(pet);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     private void spawnWidget(Pet pet) {
         if (store.findHead(pet.headId).isEmpty()) return; // orphaned pet, skip
