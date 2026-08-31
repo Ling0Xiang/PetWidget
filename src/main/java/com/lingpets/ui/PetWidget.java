@@ -154,6 +154,14 @@ public class PetWidget {
         });
     }
 
+    // Called after rotation: update imageView only, never the stage.
+    // Stage resize (which invalidates macOS cursor tracking) is deferred to scroll.
+    private void updateImageViewSize() {
+        double[] dims = scaledDims(pet.size, aspectRatio);
+        imageView.setFitWidth(dims[0]);
+        imageView.setFitHeight(dims[1]);
+    }
+
     private void applySize(double size) {
         double[] dims = scaledDims(size, aspectRatio);
         imageView.setFitWidth(dims[0]);
@@ -185,7 +193,7 @@ public class PetWidget {
         PauseTransition rotateTrigger = new PauseTransition(Duration.millis(320));
         rotateTrigger.setOnFinished(ev -> rotateHead());
 
-        playCursorAnimation(540, () -> applySize(pet.size));
+        playCursorAnimation(540, this::updateImageViewSize);
         new ParallelTransition(pulse, rotateTrigger).play();
     }
 
