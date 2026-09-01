@@ -276,6 +276,9 @@ public class PetWidget {
                 if (canvas == null)
                     canvas = new BufferedImage(raw.getWidth(), raw.getHeight(), BufferedImage.TYPE_INT_ARGB);
                 Graphics2D g = canvas.createGraphics();
+                g.setComposite(AlphaComposite.Clear);
+                g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+                g.setComposite(AlphaComposite.SrcOver);
                 g.drawImage(raw, 0, 0, null);
                 g.dispose();
                 BufferedImage scaled = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
