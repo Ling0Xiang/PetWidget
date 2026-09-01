@@ -62,7 +62,6 @@ public class PetWidget {
     private List<CursorFrame> gifFrames = List.of();
     private Timeline cursorAnimation;
     private PauseTransition restoreTransition;
-    private PauseTransition sizeUpdateTransition;
 
     private static final class CursorFrame {
         final ImageCursor cursor;
@@ -216,14 +215,6 @@ public class PetWidget {
         PauseTransition rotateTrigger = new PauseTransition(Duration.millis(320));
         rotateTrigger.setOnFinished(ev -> rotateHead());
 
-        // Cancel any in-flight size update so rapid clicks don't stack them
-        if (sizeUpdateTransition != null) sizeUpdateTransition.stop();
-        sizeUpdateTransition = new PauseTransition(Duration.millis(540));
-        sizeUpdateTransition.setOnFinished(ev -> { updateImageViewSize(); sizeUpdateTransition = null; });
-        sizeUpdateTransition.play();
-
-        // Cursor is owned by hover — ensure it's running (covers the edge case where
-        // gifFrames finished loading after mouseEntered already fired)
         startHoverCursor();
 
         new ParallelTransition(pulse, rotateTrigger).play();
@@ -321,6 +312,6 @@ public class PetWidget {
         Image newImg = loadImage.apply(newHeadId);
         aspectRatio = imageRatio(newImg);
         imageView.setImage(newImg);
-        // window resize is deferred to after the cursor animation via playCursorAnimation callback
+        updateImageViewSize();
     }
 }
