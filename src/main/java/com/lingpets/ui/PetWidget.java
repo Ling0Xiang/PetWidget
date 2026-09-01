@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
+import javafx.scene.transform.Scale;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -62,6 +63,7 @@ public class PetWidget {
     private List<CursorFrame> gifFrames = List.of();
     private Timeline cursorAnimation;
     private PauseTransition restoreTransition;
+    private Scale squashTransform;
 
     private static final class CursorFrame {
         final ImageCursor cursor;
@@ -206,18 +208,40 @@ public class PetWidget {
     }
 
     private void animatePet() {
-        ScaleTransition pulse = new ScaleTransition(Duration.millis(120), imageView);
-        pulse.setFromX(1.0); pulse.setFromY(1.0);
-        pulse.setToX(1.25);  pulse.setToY(1.25);
-        pulse.setCycleCount(2);
-        pulse.setAutoReverse(true);
+        // Remove any in-progress squash so rapid clicks start clean
+        if (squashTransform != null) {
+            imageView.getTransforms().remove(squashTransform);
+            squashTransform = null;
+        }
+
+        // Pivot at bottom-center: bottom edge stays fixed, top compresses downward
+        squashTransform = new Scale(1.0, 1.0, imageView.getFitWidth() / 2, imageView.getFitHeight());
+        imageView.getTransforms().add(squashTransform);
+        final Scale st = squashTransform;
+
+        Timeline squash = new Timeline(
+            new KeyFrame(Duration.ZERO,
+                new KeyValue(st.xProperty(), 1.0),
+                new KeyValue(st.yProperty(), 1.0)),
+            new KeyFrame(Duration.millis(120),
+                new KeyValue(st.xProperty(), 1.20, Interpolator.EASE_IN),
+                new KeyValue(st.yProperty(), 0.80, Interpolator.EASE_IN)),
+            new KeyFrame(Duration.millis(220),
+                new KeyValue(st.xProperty(), 0.97, Interpolator.EASE_OUT),
+                new KeyValue(st.yProperty(), 1.03, Interpolator.EASE_OUT)),
+            new KeyFrame(Duration.millis(300),
+                new KeyValue(st.xProperty(), 1.0),
+                new KeyValue(st.yProperty(), 1.0))
+        );
 
         PauseTransition rotateTrigger = new PauseTransition(Duration.millis(320));
         rotateTrigger.setOnFinished(ev -> rotateHead());
 
-        startHoverCursor();
+        ParallelTransition pt = new ParallelTransition(squash, rotateTrigger);
+        pt.setOnFinished(ev -> imageView.getTransforms().remove(st));
 
-        new ParallelTransition(pulse, rotateTrigger).play();
+        startHoverCursor();
+        pt.play();
     }
 
     private void playCursorAnimation(double durationMs, Runnable onComplete) {
