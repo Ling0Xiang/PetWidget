@@ -180,12 +180,12 @@ public class PetWidget {
         stage.getScene().setCursor(javafx.scene.Cursor.DEFAULT);
     }
 
-    // Called after rotation: update imageView only, never the stage.
-    // Stage resize (which invalidates macOS cursor tracking) is deferred to scroll.
     private void updateImageViewSize() {
         double[] dims = scaledDims(pet.size, aspectRatio);
         imageView.setFitWidth(dims[0]);
         imageView.setFitHeight(dims[1]);
+        stage.setWidth(dims[0]);
+        stage.setHeight(dims[1]);
     }
 
     private void applySize(double size) {
