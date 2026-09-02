@@ -66,15 +66,19 @@ public class PetWidget {
     private double aspectRatio = 1.0; // width / height of the current head image
 
     private List<CursorFrame> gifFrames = List.of();
+    private ImageCursor staticHoverCursor; // first GIF frame — used on hover, no Timeline needed
     private Timeline cursorAnimation;
     private PauseTransition restoreTransition;
     private Scale squashTransform;
     private Runnable onShowPanel;
 
     private static final class CursorFrame {
+        final WritableImage image; // strong ref prevents GC of the native cursor backing buffer
         final ImageCursor cursor;
         final int delayMs;
-        CursorFrame(ImageCursor cursor, int delayMs) { this.cursor = cursor; this.delayMs = delayMs; }
+        CursorFrame(WritableImage image, ImageCursor cursor, int delayMs) {
+            this.image = image; this.cursor = cursor; this.delayMs = delayMs;
+        }
     }
 
     public PetWidget(Pet pet, PetStore store, Image initialImage,
@@ -105,6 +109,8 @@ public class PetWidget {
         stage.setY(pet.y);
 
         gifFrames = loadGifFrames("/cursors/petpet-transparent.gif", (int)(pet.size * 0.2));
+        // First frame is used as the static hover cursor — no animation overhead while idling
+        if (!gifFrames.isEmpty()) staticHoverCursor = gifFrames.get(0).cursor;
         wireEvents(root);
     }
 
@@ -179,8 +185,24 @@ public class PetWidget {
         });
     }
 
+    // Hover: set the pre-built first-frame cursor directly — no Timeline, no stutter.
     private void startHoverCursor() {
-        if (gifFrames.isEmpty() || cursorAnimation != null) return;
+        if (staticHoverCursor == null || cursorAnimation != null) return;
+        stage.getScene().setCursor(staticHoverCursor);
+    }
+
+    private void stopHoverCursor() {
+        if (restoreTransition != null) { restoreTransition.stop(); restoreTransition = null; }
+        if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
+        stage.getScene().setCursor(javafx.scene.Cursor.DEFAULT);
+    }
+
+    // Click: play the full GIF animation once, then revert to the static hover cursor.
+    private void startClickCursorAnimation() {
+        if (gifFrames.isEmpty()) return;
+        if (restoreTransition != null) { restoreTransition.stop(); restoreTransition = null; }
+        if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
+
         Scene scene = stage.getScene();
         Timeline tl = new Timeline();
         double t = 0;
@@ -189,15 +211,22 @@ public class PetWidget {
             tl.getKeyFrames().add(new KeyFrame(Duration.millis(t), ev -> scene.setCursor(c)));
             t += f.delayMs;
         }
-        tl.setCycleCount(Timeline.INDEFINITE);
+        // One full pass through the GIF — not INDEFINITE, so it won't loop forever.
+        tl.setCycleCount(1);
         tl.play();
         cursorAnimation = tl;
-    }
 
-    private void stopHoverCursor() {
-        if (restoreTransition != null) { restoreTransition.stop(); restoreTransition = null; }
-        if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
-        stage.getScene().setCursor(javafx.scene.Cursor.DEFAULT);
+        // After the GIF's natural duration, revert to the static first frame.
+        // Mouse is still over the widget, so we restore hover rather than DEFAULT.
+        final double gifDurationMs = t;
+        PauseTransition restore = new PauseTransition(Duration.millis(gifDurationMs));
+        restore.setOnFinished(ev -> {
+            cursorAnimation = null;
+            restoreTransition = null;
+            scene.setCursor(staticHoverCursor != null ? staticHoverCursor : javafx.scene.Cursor.DEFAULT);
+        });
+        restore.play();
+        restoreTransition = restore;
     }
 
     private void updateImageViewSize() {
@@ -260,38 +289,8 @@ public class PetWidget {
         ParallelTransition pt = new ParallelTransition(squash, rotateTrigger);
         pt.setOnFinished(ev -> imageView.getTransforms().remove(st));
 
-        startHoverCursor();
+        startClickCursorAnimation();
         pt.play();
-    }
-
-    private void playCursorAnimation(double durationMs, Runnable onComplete) {
-        if (gifFrames.isEmpty()) {
-            if (onComplete != null) onComplete.run();
-            return;
-        }
-        if (restoreTransition != null) { restoreTransition.stop(); restoreTransition = null; }
-        if (cursorAnimation != null) { cursorAnimation.stop(); cursorAnimation = null; }
-        Scene scene = stage.getScene();
-        Timeline tl = new Timeline();
-        double t = 0;
-        for (CursorFrame f : gifFrames) {
-            ImageCursor c = f.cursor;
-            tl.getKeyFrames().add(new KeyFrame(Duration.millis(t), ev -> scene.setCursor(c)));
-            t += f.delayMs;
-        }
-        tl.setCycleCount(Timeline.INDEFINITE);
-        tl.play();
-        cursorAnimation = tl;
-        PauseTransition restore = new PauseTransition(Duration.millis(durationMs));
-        restore.setOnFinished(ev -> {
-            tl.stop();
-            cursorAnimation = null;
-            restoreTransition = null;
-            scene.setCursor(javafx.scene.Cursor.DEFAULT);
-            if (onComplete != null) onComplete.run();
-        });
-        restore.play();
-        restoreTransition = restore;
     }
 
     private List<CursorFrame> loadGifFrames(String resource, int targetSize) {
@@ -322,8 +321,9 @@ public class PetWidget {
                 gs.drawImage(canvas, 0, 0, size, size, null);
                 gs.dispose();
                 WritableImage fx = SwingFXUtils.toFXImage(scaled, null);
+                // hotspot: horizontal centre, 2px from top — matches the hand tip
                 ImageCursor cursor = new ImageCursor(fx, size / 2.0, 2);
-                frames.add(new CursorFrame(cursor, gifFrameDelayMs(reader.getImageMetadata(i))));
+                frames.add(new CursorFrame(fx, cursor, gifFrameDelayMs(reader.getImageMetadata(i))));
             }
             reader.dispose();
             return frames;
