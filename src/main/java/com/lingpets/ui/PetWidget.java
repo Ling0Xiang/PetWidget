@@ -4,9 +4,14 @@ import com.lingpets.model.Pet;
 import com.lingpets.model.PetStore;
 import javafx.animation.*;
 import javafx.embed.swing.SwingFXUtils;
+import javafx.application.Platform;
 import javafx.scene.ImageCursor;
 import javafx.scene.Scene;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.image.Image;
+import javafx.scene.input.MouseButton;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.StackPane;
@@ -64,6 +69,7 @@ public class PetWidget {
     private Timeline cursorAnimation;
     private PauseTransition restoreTransition;
     private Scale squashTransform;
+    private Runnable onShowPanel;
 
     private static final class CursorFrame {
         final ImageCursor cursor;
@@ -106,11 +112,13 @@ public class PetWidget {
     public void close() { stage.close(); }
     public String getPetId()  { return pet.id; }
     public String getHeadId() { return pet.headId; }
+    public void setOnShowPanel(Runnable r) { this.onShowPanel = r; }
 
     // -------------------------------------------------------------------------
 
     private void wireEvents(StackPane root) {
         root.setOnMousePressed(e -> {
+            if (e.getButton() != MouseButton.PRIMARY) return;
             pressOffsetX = e.getScreenX() - stage.getX();
             pressOffsetY = e.getScreenY() - stage.getY();
             pressScreenX = e.getScreenX();
@@ -120,6 +128,7 @@ public class PetWidget {
         });
 
         root.setOnMouseDragged(e -> {
+            if (e.getButton() != MouseButton.PRIMARY) return;
             double moved = Math.abs(e.getScreenX() - pressScreenX)
                          + Math.abs(e.getScreenY() - pressScreenY);
             if (moved > DRAG_THRESHOLD) dragging = true;
@@ -131,6 +140,7 @@ public class PetWidget {
         });
 
         root.setOnMouseReleased(e -> {
+            if (e.getButton() != MouseButton.PRIMARY) return;
             if (dragging) {
                 pet.x = stage.getX();
                 pet.y = stage.getY();
@@ -140,6 +150,16 @@ public class PetWidget {
                 animatePet();
             }
             dragging = false;
+            e.consume();
+        });
+
+        MenuItem showPanelItem = new MenuItem("Show Control Panel");
+        showPanelItem.setOnAction(ev -> { if (onShowPanel != null) onShowPanel.run(); });
+        MenuItem quitItem = new MenuItem("Quit");
+        quitItem.setOnAction(ev -> Platform.exit());
+        ContextMenu contextMenu = new ContextMenu(showPanelItem, new SeparatorMenuItem(), quitItem);
+        root.setOnContextMenuRequested(e -> {
+            contextMenu.show(stage, e.getScreenX(), e.getScreenY());
             e.consume();
         });
 

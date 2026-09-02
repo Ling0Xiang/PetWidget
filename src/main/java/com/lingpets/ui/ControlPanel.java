@@ -71,7 +71,7 @@ public class ControlPanel {
         Scene scene = new Scene(root, 280, 420);
         stage.setScene(scene);
         stage.setTitle("Desktop Cat Pets");
-        stage.setOnCloseRequest(e -> Platform.exit());
+        stage.setOnCloseRequest(e -> { e.consume(); stage.hide(); });
     }
 
     public void show() { stage.show(); }

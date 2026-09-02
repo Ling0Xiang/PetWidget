@@ -175,6 +175,7 @@ public class Main extends Application {
         if (store.findHead(pet.headId).isEmpty()) return; // orphaned pet, skip
         Image img = loadImage(pet.headId);
         PetWidget widget = new PetWidget(pet, store, img, this::loadImage, this::nextHeadId);
+        widget.setOnShowPanel(controlPanel::show);
         widgets.add(widget);
         widget.show();
     }
